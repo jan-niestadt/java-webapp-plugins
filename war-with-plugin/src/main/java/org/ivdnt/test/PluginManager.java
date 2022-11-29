@@ -4,82 +4,70 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
-import java.util.stream.Collectors;
 
 /**
  * Load plugins from a directory and hot reload them when their JAR changes.
  */
-public class PluginManager {
+public class PluginManager implements Iterable<StringProcessingPlugin> {
 
-    /** A hot-reloadable plugin. */
-    class ReloadablePlugin {
+    /**
+     * A JAR file we're monitoring, so we can hot reload.
+     */
+    class PluginJar {
 
-        private StringProcessingPlugin instance;
-
+        /** The JAR file */
         private final File jarFile;
 
+        /** Mtime from last load. */
         private long fileModifiedDate;
 
-        public ReloadablePlugin(StringProcessingPlugin instance, File jarFile) {
-            this.instance = instance;
+        public PluginJar(File jarFile) {
             this.jarFile = jarFile;
-            this.fileModifiedDate = jarFile.lastModified();
+            this.fileModifiedDate = -1;
+            checkReload();
         }
 
-        private synchronized void checkReload() {
+        /**
+         * Check if the file changed, and reload plugins if it did.
+         */
+        public synchronized void checkReload() {
             if (jarFile.lastModified() > fileModifiedDate) {
                 // JAR was modified. Try to reload plugin.
                 fileModifiedDate = jarFile.lastModified();
-                System.out.println("RELOAD JAR: " + jarFile);
+                System.out.println("LOAD JAR: " + jarFile);
 
                 // NOTE: we recraete loader here because .reload()'ing it is apparently not enough...
                 for (StringProcessingPlugin plugin: serviceLoader(jarFile)) {
-                    if (plugin.getClass().getName().equals(instance.getClass().getName())) {
-                        // This is the updated version of this plugin.
-                        instance = plugin;
-                        System.out.println("PLUGIN RELOADED: " + plugin.getName());
-                    }
+                    registerPlugin(plugin);
                 }
             }
         }
 
-        public synchronized StringProcessingPlugin get() {
-            checkReload();
-            return instance;
+        private ServiceLoader<StringProcessingPlugin> serviceLoader(File jarFile) {
+            try {
+                URL url = jarFile.toURI().toURL();
+                URLClassLoader child = new URLClassLoader(new URL[] { url }, this.getClass().getClassLoader());
+                return ServiceLoader.load(StringProcessingPlugin.class, child);
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            }
         }
+
     }
+
+    /** Our plugin JAR files to monitor for changes. */
+    private final List<PluginJar> jarFiles = new ArrayList<>();
 
     /** Loaded and instantiated plugins. */
-    private final Map<String, ReloadablePlugin> plugins;
-
-    /**
-     * Return a list of available plugins.
-     *
-     * @return available plugins
-     */
-    public List<StringProcessingPlugin> list() {
-        return plugins.values().stream()
-                .map(ReloadablePlugin::get)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get a specific plugin by name.
-     *
-     * @param pluginName name of the plugin
-     * @return plugin if found
-     */
-    public Optional<StringProcessingPlugin> get(String pluginName) {
-        if (plugins.containsKey(pluginName))
-            return Optional.of(plugins.get(pluginName).get());
-        return Optional.empty();
-    }
+    private final Map<String, StringProcessingPlugin> plugins;
 
     /**
      * Initially Load plugins.
@@ -89,13 +77,11 @@ public class PluginManager {
     public PluginManager(File pluginDir) {
         plugins = new HashMap<>();
         try {
-            // TODO: instead of reloading individual plugins, we should rescan the directory for
-            //       new or updated JARs, so we can add/remove plugins on the fly as well.'
-
             File[] files = pluginDir.listFiles(file -> file.getName().toLowerCase(Locale.ROOT).endsWith(".jar"));
             if (files != null) {
                 for (File f: files) {
-                    loadPluginsFromJar(f);
+                    // PluginJar constructor will load the JAR file and register the plugins.
+                    registerPluginJar(f);
                 }
             }
             System.out.println("PLUGINS LOADED");
@@ -105,24 +91,53 @@ public class PluginManager {
         }
     }
 
-    private void loadPluginsFromJar(File jarFile) {
-        try {
-            for (StringProcessingPlugin plugin: serviceLoader(jarFile)) {
-                plugins.put(plugin.getName(), new ReloadablePlugin(plugin, jarFile));
-            }
-        } catch (Exception e) {
-            System.out.println("ERROR LOADING PLUGIN JAR: " + jarFile);
-            e.printStackTrace(System.out);
+    /**
+     * Load and start monitoring a JAR containing plugins.
+     *
+     * @param f JAR file to load and monitor
+     */
+    public void registerPluginJar(File f) {
+        jarFiles.add(new PluginJar(f));
+    }
+
+    /***
+     * Register a plugin.
+     *
+     * @param plugin plugin to register
+     */
+    public void registerPlugin(StringProcessingPlugin plugin) {
+        plugins.put(plugin.getName(), plugin);
+    }
+
+    /**
+     * Return a list of available plugins.
+     *
+     * @return available plugins
+     */
+    public Iterator<StringProcessingPlugin> iterator() {
+        return plugins.values().iterator();
+    }
+
+    /**
+     * Get a specific plugin by name.
+     *
+     * @param pluginName name of the plugin
+     * @return plugin if found
+     */
+    public Optional<StringProcessingPlugin> get(String pluginName) {
+        reloadChangedPlugins();
+        if (plugins.containsKey(pluginName))
+            return Optional.of(plugins.get(pluginName));
+        return Optional.empty();
+    }
+
+    /**
+     * Check if any of the JAR files changed and if so, reload plugins.
+     */
+    private synchronized void reloadChangedPlugins() {
+        for (PluginJar jar: jarFiles) {
+            jar.checkReload();
         }
     }
 
-    private ServiceLoader<StringProcessingPlugin> serviceLoader(File jarFile) {
-        try {
-            URL url = jarFile.toURI().toURL();
-            URLClassLoader child = new URLClassLoader(new URL[] { url }, this.getClass().getClassLoader());
-            return ServiceLoader.load(StringProcessingPlugin.class, child);
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
-        }
-    }
 }

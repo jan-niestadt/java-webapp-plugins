@@ -1,13 +1,7 @@
 package org.ivdnt.test;
 
 import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
-import java.util.ServiceLoader;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -45,8 +39,8 @@ public class TestServlet extends HttpServlet {
     private String getListOfPlugins() {
         StringBuilder output = new StringBuilder();
         output.append("Available plugins:\n\n");
-        for (StringProcessingPlugin plugin: plugins.list()) {
-            output.append("- " + plugin.getName() + " (" + plugin.getDescription() + ")\n");
+        for (StringProcessingPlugin plugin: plugins) {
+            output.append(String.format("- %s (%s)\n", plugin.getName(), plugin.getDescription()));
         }
         return output.toString();
     }

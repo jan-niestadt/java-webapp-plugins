@@ -13,6 +13,6 @@ public class PluginToUpper implements StringProcessingPlugin {
     }
 
     public String process(String value) {
-        return value.toUpperCase(Locale.ROOT) + " TEST";
+        return value.toUpperCase(Locale.ROOT);
     }
 }
