@@ -1,9 +1,6 @@
 package org.ivdnt.test;
 
 import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.Optional;
 import java.util.ServiceLoader;
 
@@ -15,7 +12,7 @@ import javax.servlet.http.HttpServletResponse;
 public class TestServlet extends HttpServlet {
 
     /** Directory to load plugins from */
-    public static final File PLUGIN_DIR = new File("/home/jan/int-projects/studiedag/plugins");
+    public static final File PLUGIN_DIR = new File("/home/jan/int-projects/java-webapp-plugins/plugins");
 
     private PluginManager<StringProcessingPlugin> plugins;
 
@@ -61,19 +58,7 @@ public class TestServlet extends HttpServlet {
     @Override
     public void init() throws ServletException {
         super.init();
-        PluginManager.ServiceLoaderFactory<StringProcessingPlugin> serviceLoaderFactory = new
-                PluginManager.ServiceLoaderFactory<StringProcessingPlugin>() {
-            @Override
-            public ServiceLoader<StringProcessingPlugin> serviceLoader(File jarFile) {
-                try {
-                    URL url = jarFile.toURI().toURL();
-                    URLClassLoader child = new URLClassLoader(new URL[] { url }, this.getClass().getClassLoader());
-                    return ServiceLoader.load(StringProcessingPlugin.class, child);
-                } catch (MalformedURLException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        };
-        plugins = new PluginManager<>(PLUGIN_DIR, serviceLoaderFactory);
+        plugins = new PluginManager<>(PLUGIN_DIR,
+                        loader -> ServiceLoader.load(StringProcessingPlugin.class, loader));
     }
 }

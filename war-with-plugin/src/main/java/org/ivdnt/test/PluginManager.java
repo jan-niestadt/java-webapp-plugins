@@ -1,6 +1,9 @@
 package org.ivdnt.test;
 
 import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -14,10 +17,6 @@ import java.util.ServiceLoader;
  * Load plugins from a directory and hot reload them when their JAR changes.
  */
 public class PluginManager<T extends StringProcessingPlugin> implements Iterable<T> {
-
-    interface ServiceLoaderFactory<T> {
-        ServiceLoader<T> serviceLoader(File jarFile);
-    }
 
     /**
      * A JAR file we're monitoring, so we can hot reload.
@@ -45,9 +44,16 @@ public class PluginManager<T extends StringProcessingPlugin> implements Iterable
                 fileModifiedDate = jarFile.lastModified();
                 System.out.println("LOAD JAR: " + jarFile);
 
-                // NOTE: we recraete loader here because .reload()'ing it is apparently not enough...
-                for (Object plugin: serviceLoaderFactory.serviceLoader(jarFile)) {
-                    registerPlugin((T)plugin);
+                try {
+                    // NOTE: we recreate loader here because .reload()'ing it is apparently not enough...
+                    URL url = jarFile.toURI().toURL();
+                    URLClassLoader child = new URLClassLoader(new URL[] { url }, this.getClass().getClassLoader());
+                    ServiceLoader<T> serviceLoader = serviceLoaderFactory.serviceLoader(child);
+                    for (T plugin: serviceLoader) {
+                        registerPlugin(plugin);
+                    }
+                } catch (MalformedURLException e) {
+                    throw new RuntimeException(e);
                 }
             }
         }
@@ -55,7 +61,7 @@ public class PluginManager<T extends StringProcessingPlugin> implements Iterable
     }
 
     /** How to create ServiceLoader for our service type */
-    private final ServiceLoaderFactory serviceLoaderFactory;
+    private final ServiceLoaderFactory<T> serviceLoaderFactory;
 
     /** Our plugin JAR files to monitor for changes. */
     private final List<PluginJar> jarFiles = new ArrayList<>();
@@ -68,7 +74,7 @@ public class PluginManager<T extends StringProcessingPlugin> implements Iterable
      *
      * @param pluginDir directory to load JARs from.
      */
-    public PluginManager(File pluginDir, ServiceLoaderFactory serviceLoaderFactory) {
+    public PluginManager(File pluginDir, ServiceLoaderFactory<T> serviceLoaderFactory) {
         this.serviceLoaderFactory = serviceLoaderFactory;
         plugins = new HashMap<>();
         try {
