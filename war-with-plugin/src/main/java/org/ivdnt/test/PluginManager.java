@@ -1,9 +1,6 @@
 package org.ivdnt.test;
 
 import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -16,7 +13,11 @@ import java.util.ServiceLoader;
 /**
  * Load plugins from a directory and hot reload them when their JAR changes.
  */
-public class PluginManager implements Iterable<StringProcessingPlugin> {
+public class PluginManager<T extends StringProcessingPlugin> implements Iterable<T> {
+
+    interface ServiceLoaderFactory<T> {
+        ServiceLoader<T> serviceLoader(File jarFile);
+    }
 
     /**
      * A JAR file we're monitoring, so we can hot reload.
@@ -45,36 +46,30 @@ public class PluginManager implements Iterable<StringProcessingPlugin> {
                 System.out.println("LOAD JAR: " + jarFile);
 
                 // NOTE: we recraete loader here because .reload()'ing it is apparently not enough...
-                for (StringProcessingPlugin plugin: serviceLoader(jarFile)) {
-                    registerPlugin(plugin);
+                for (Object plugin: serviceLoaderFactory.serviceLoader(jarFile)) {
+                    registerPlugin((T)plugin);
                 }
-            }
-        }
-
-        private ServiceLoader<StringProcessingPlugin> serviceLoader(File jarFile) {
-            try {
-                URL url = jarFile.toURI().toURL();
-                URLClassLoader child = new URLClassLoader(new URL[] { url }, this.getClass().getClassLoader());
-                return ServiceLoader.load(StringProcessingPlugin.class, child);
-            } catch (MalformedURLException e) {
-                throw new RuntimeException(e);
             }
         }
 
     }
 
+    /** How to create ServiceLoader for our service type */
+    private final ServiceLoaderFactory serviceLoaderFactory;
+
     /** Our plugin JAR files to monitor for changes. */
     private final List<PluginJar> jarFiles = new ArrayList<>();
 
     /** Loaded and instantiated plugins. */
-    private final Map<String, StringProcessingPlugin> plugins;
+    private final Map<String, T> plugins;
 
     /**
      * Initially Load plugins.
      *
      * @param pluginDir directory to load JARs from.
      */
-    public PluginManager(File pluginDir) {
+    public PluginManager(File pluginDir, ServiceLoaderFactory serviceLoaderFactory) {
+        this.serviceLoaderFactory = serviceLoaderFactory;
         plugins = new HashMap<>();
         try {
             File[] files = pluginDir.listFiles(file -> file.getName().toLowerCase(Locale.ROOT).endsWith(".jar"));
@@ -105,7 +100,7 @@ public class PluginManager implements Iterable<StringProcessingPlugin> {
      *
      * @param plugin plugin to register
      */
-    public void registerPlugin(StringProcessingPlugin plugin) {
+    public void registerPlugin(T plugin) {
         plugins.put(plugin.getName(), plugin);
     }
 
@@ -114,7 +109,7 @@ public class PluginManager implements Iterable<StringProcessingPlugin> {
      *
      * @return available plugins
      */
-    public Iterator<StringProcessingPlugin> iterator() {
+    public Iterator<T> iterator() {
         return plugins.values().iterator();
     }
 
@@ -124,7 +119,7 @@ public class PluginManager implements Iterable<StringProcessingPlugin> {
      * @param pluginName name of the plugin
      * @return plugin if found
      */
-    public Optional<StringProcessingPlugin> get(String pluginName) {
+    public Optional<T> get(String pluginName) {
         reloadChangedPlugins();
         if (plugins.containsKey(pluginName))
             return Optional.of(plugins.get(pluginName));

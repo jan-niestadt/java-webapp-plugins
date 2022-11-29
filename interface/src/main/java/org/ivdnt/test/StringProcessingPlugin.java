@@ -1,10 +1,7 @@
 package org.ivdnt.test;
 
-public interface StringProcessingPlugin {
+public interface StringProcessingPlugin extends Plugin {
 
     String process(String value);
 
-    String getDescription();
-
-    String getName();
 }
