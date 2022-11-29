@@ -14,9 +14,9 @@ import java.util.Optional;
 import java.util.ServiceLoader;
 
 /**
- * Load plugins from a directory and hot reload them when their JAR changes.
+ * Load plugins and hot reload them if their JAR changes.
  */
-public class PluginManager<T extends StringProcessingPlugin> implements Iterable<T> {
+public class PluginManager<T extends StringProcessor> implements Iterable<T> {
 
     /**
      * A JAR file we're monitoring, so we can hot reload.
@@ -48,7 +48,7 @@ public class PluginManager<T extends StringProcessingPlugin> implements Iterable
                     // NOTE: we recreate loader here because .reload()'ing it is apparently not enough...
                     URL url = jarFile.toURI().toURL();
                     URLClassLoader child = new URLClassLoader(new URL[] { url }, this.getClass().getClassLoader());
-                    ServiceLoader<T> serviceLoader = serviceLoaderFactory.serviceLoader(child);
+                    ServiceLoader<T> serviceLoader = ServiceLoader.load(clazz, child);
                     for (T plugin: serviceLoader) {
                         registerPlugin(plugin);
                     }
@@ -60,29 +60,45 @@ public class PluginManager<T extends StringProcessingPlugin> implements Iterable
 
     }
 
-    /** How to create ServiceLoader for our service type */
-    private final ServiceLoaderFactory<T> serviceLoaderFactory;
+    /** Base class or interface for our plugins. */
+    private final Class<T> clazz;
+
+    /** Default package to optionally use when searching by class name. */
+    private String defaultPackage = "";
 
     /** Our plugin JAR files to monitor for changes. */
     private final List<PluginJar> jarFiles = new ArrayList<>();
 
     /** Loaded and instantiated plugins. */
-    private final Map<String, T> plugins;
+    private final Map<String, T> plugins = new HashMap<>();
+
+    /** Loaded and instantiated plugins. */
+    private final Map<String, T> pluginsByClass = new HashMap<>();
 
     /**
      * Initially Load plugins.
      *
-     * @param pluginDir directory to load JARs from.
+     * @param clazz base class or interface for our plugins
      */
-    public PluginManager(File pluginDir, ServiceLoaderFactory<T> serviceLoaderFactory) {
-        this.serviceLoaderFactory = serviceLoaderFactory;
-        plugins = new HashMap<>();
+    public PluginManager(Class<T> clazz) {
+        this.clazz = clazz;
+    }
+
+    public void setDefaultPackage(String defaultPackage) {
+        this.defaultPackage = defaultPackage;
+    }
+
+    /**
+     * Load and monitor plugin JARs from specified dir.
+     * @param pluginDir directory to load plugins from
+     */
+    public void registerDirectory(File pluginDir) {
         try {
             File[] files = pluginDir.listFiles(file -> file.getName().toLowerCase(Locale.ROOT).endsWith(".jar"));
             if (files != null) {
                 for (File f: files) {
                     // PluginJar constructor will load the JAR file and register the plugins.
-                    registerPluginJar(f);
+                    registerJarFile(f);
                 }
             }
             System.out.println("PLUGINS LOADED");
@@ -97,17 +113,20 @@ public class PluginManager<T extends StringProcessingPlugin> implements Iterable
      *
      * @param f JAR file to load and monitor
      */
-    public void registerPluginJar(File f) {
+    public void registerJarFile(File f) {
         jarFiles.add(new PluginJar(f));
     }
 
     /***
      * Register a plugin.
      *
+     * Note that hot reloading won't work if you call this method directly.
+     *
      * @param plugin plugin to register
      */
     public void registerPlugin(T plugin) {
         plugins.put(plugin.getName(), plugin);
+        pluginsByClass.put(plugin.getClass().getName(), plugin);
     }
 
     /**
@@ -125,11 +144,39 @@ public class PluginManager<T extends StringProcessingPlugin> implements Iterable
      * @param pluginName name of the plugin
      * @return plugin if found
      */
-    public Optional<T> get(String pluginName) {
+    public Optional<T> byName(String pluginName) {
         reloadChangedPlugins();
         if (plugins.containsKey(pluginName))
             return Optional.of(plugins.get(pluginName));
         return Optional.empty();
+    }
+
+    /**
+     * Get a specific plugin by fully qualified class name.
+     *
+     * @param className classname, either fully qualified or in the default package
+     * @return plugin if found
+     */
+    public Optional<T> byClass(String className) {
+        reloadChangedPlugins();
+        if (pluginsByClass.containsKey(className))
+            return Optional.of(pluginsByClass.get(className));
+        if (pluginsByClass.containsKey(defaultPackage + "." + className))
+            return Optional.of(pluginsByClass.get(defaultPackage + "." + className));
+        return Optional.empty();
+    }
+
+    /**
+     * Get plugin by either name or fully qualified classname.
+     *
+     * @param id name or class name
+     * @return plugin if found
+     */
+    public Optional<T> get(String id) {
+        Optional<T> result = byName(id);
+        if (result.isEmpty())
+            result = byClass(id);
+        return result;
     }
 
     /**

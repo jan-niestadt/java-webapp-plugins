@@ -2,7 +2,8 @@ package org.ivdnt.test;
 
 import java.util.Locale;
 
-public class PluginToUpper implements StringProcessingPlugin {
+/** Convert input string to upper case. */
+public class ToUpperCase implements StringProcessor {
 
     public String getName() {
         return "upper";

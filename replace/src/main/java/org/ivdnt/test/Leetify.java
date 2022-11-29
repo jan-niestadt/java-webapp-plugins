@@ -1,6 +1,7 @@
 package org.ivdnt.test;
 
-public class PluginLeetspeak implements StringProcessingPlugin {
+/** Convert to leetspeak */
+public class Leetify implements StringProcessor {
 
     @Override
     public String getName() {

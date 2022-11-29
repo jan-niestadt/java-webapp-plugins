@@ -2,7 +2,6 @@ package org.ivdnt.test;
 
 import java.io.File;
 import java.util.Optional;
-import java.util.ServiceLoader;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -14,7 +13,7 @@ public class TestServlet extends HttpServlet {
     /** Directory to load plugins from */
     public static final File PLUGIN_DIR = new File("/home/jan/int-projects/java-webapp-plugins/plugins");
 
-    private PluginManager<StringProcessingPlugin> plugins;
+    private PluginManager<StringProcessor> plugins;
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException {
@@ -40,14 +39,15 @@ public class TestServlet extends HttpServlet {
     private String getListOfPlugins() {
         StringBuilder output = new StringBuilder();
         output.append("Available plugins:\n\n");
-        for (StringProcessingPlugin plugin: plugins) {
+        for (StringProcessor plugin: plugins) {
             output.append(String.format("- %s (%s)\n", plugin.getName(), plugin.getDescription()));
         }
+        output.append("\nUsage: ?plugin=<NAME_OR_CLASS>&input=<INPUT>\n");
         return output.toString();
     }
 
     private String process(String pluginName, String input) {
-        Optional<StringProcessingPlugin> plugin = plugins.get(pluginName);
+        Optional<StringProcessor> plugin = plugins.get(pluginName);
         if (plugin.isPresent()) {
             String output = plugin.get().process(input);
             return "PLUGIN " + pluginName + ": " + input + " -> " + output;
@@ -58,7 +58,8 @@ public class TestServlet extends HttpServlet {
     @Override
     public void init() throws ServletException {
         super.init();
-        plugins = new PluginManager<>(PLUGIN_DIR,
-                        loader -> ServiceLoader.load(StringProcessingPlugin.class, loader));
+        plugins = new PluginManager<>(StringProcessor.class);
+        plugins.setDefaultPackage("org.ivdnt.test");
+        plugins.registerDirectory(PLUGIN_DIR);
     }
 }

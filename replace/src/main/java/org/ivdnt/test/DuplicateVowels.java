@@ -1,6 +1,7 @@
 package org.ivdnt.test;
 
-public class PluginDuplicateVowels implements StringProcessingPlugin {
+/** Duplicate all vowels */
+public class DuplicateVowels implements StringProcessor {
 
     @Override
     public String getName() {
