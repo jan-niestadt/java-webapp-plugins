@@ -1,15 +1,14 @@
 package org.ivdnt.test;
 
-import java.util.Locale;
+public class PluginLeetspeak implements StringProcessingPlugin {
 
-public class Replace implements StringProcessingPlugin {
+    @Override
+    public String getName() {
+        return "leet";
+    }
 
     public String getDescription() {
         return "Replace some letters with their l33tsp34k equivalent";
-    }
-
-    public Replace() {
-        // do nothing
     }
 
     public String process(String value) {
