@@ -9,8 +9,8 @@
 
     <scm>
         <developerConnection>scm:git:git@github.com:jan-niestadt/java-webapp-plugins.git</developerConnection>
-      <tag>HEAD</tag>
-  </scm>
+        <tag>HEAD</tag>
+    </scm>
 
     <modules>
         <module>war-with-plugin</module>
