@@ -11,7 +11,7 @@
     <name>WAR with plugins</name>
 
     <scm>
-        <developerConnection>scm:git:git@github.com/jan-niestadt/java-webapp-plugins</developerConnection>
+        <developerConnection>scm:git:git@github.com:jan-niestadt/java-webapp-plugins.git</developerConnection>
     </scm>
 
     <modules>
